@@ -21,6 +21,82 @@ const STATUS_COLOR = {
   "Under Contract":C.green,"Due Diligence":C.cyan,"Closed":C.green,"Dead":C.red
 }
 
+
+// ─── SUPABASE ─────────────────────────────────────────────────────────────────
+const SUPA_URL = "https://dsoydsncwltjyvhakwvn.supabase.co"
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzb3lkc25jd2x0anl2aGFrd3ZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MTkzOTgsImV4cCI6MjA5Mjk5NTM5OH0.hIe-gbqhcJ_H0VHPbqxNhYPNMPLfy86ggky-mUqjQ1c"
+
+async function sb(path, opts={}) {
+  const res = await fetch(SUPA_URL + "/rest/v1/" + path, {
+    method: opts.method || "GET",
+    headers: {
+      "apikey": SUPA_KEY,
+      "Authorization": "Bearer " + SUPA_KEY,
+      "Content-Type": "application/json",
+      "Prefer": opts.method === "POST" ? "return=representation" : opts.method === "PATCH" ? "return=representation" : ""
+    },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  })
+  const text = await res.text()
+  try { return text ? JSON.parse(text) : null } catch(e) { return null }
+}
+
+const TYPE_ICONS = {"Gas Station":"⛽","Convenience Store":"🏪","C-Store":"🏪","Smoke Shop":"💨","Liquor Store":"🍷"}
+
+function normalizeLead(row) {
+  let notesArr = []
+  try { notesArr = row.notes ? JSON.parse(row.notes) : [] } catch(e) {
+    if (row.notes) notesArr = [{text:row.notes, author:"System", ts:row.created_at}]
+  }
+  return {
+    id: row.id,
+    site: row.site || "",
+    type: row.type || "",
+    icon: TYPE_ICONS[row.type] || "🏢",
+    firstName: row.first_name || "",
+    lastName: row.last_name || "",
+    phone: row.phone || "",
+    email: row.email || "",
+    address: row.address || "",
+    askingPrice: Number(row.asking_price) || 0,
+    details: row.details || "",
+    reason: row.reason || "",
+    notes: row.notes || "",
+    notesArr,
+    status: row.status || "New",
+    assignedTo: row.assigned_to ? Number(row.assigned_to) : null,
+    ts: row.created_at || new Date().toISOString(),
+  }
+}
+
+function normalizeDeal(row) {
+  let notesArr = []
+  try { notesArr = row.notes ? JSON.parse(row.notes) : [] } catch(e) {
+    if (row.notes) notesArr = [{text:row.notes, author:"System", ts:row.created_at}]
+  }
+  return {
+    id: row.id,
+    portal: row.portal || "",
+    listingName: row.listing_name || "",
+    listingType: row.listing_type || "",
+    buyerName: row.buyer_name || "",
+    buyerEmail: row.buyer_email || "",
+    buyerPhone: row.buyer_phone || "",
+    buyerEntity: row.buyer_entity || "",
+    offerPrice: Number(row.offer_price) || 0,
+    financing: row.financing || "",
+    structure: row.structure || "",
+    ddPeriod: row.dd_period || "",
+    status: row.status || "New",
+    assignedTo: row.assigned_to ? Number(row.assigned_to) : null,
+    ts: row.created_at || new Date().toISOString(),
+    brokerFee: Number(row.broker_fee) || 0,
+    notes: row.notes || "",
+    notesArr,
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const USERS_DB = [
   { id:1, name:"Ahsan Charania",   email:"ahsan@veribas.com",   role:"admin",     initials:"AC", password:"#Veribas12345" },
   { id:2, name:"Sarah Johnson",    email:"sarah@veribas.com",   role:"processor", initials:"SJ", password:"proc123"  },
@@ -541,17 +617,49 @@ export default function VeribasAdmin() {
   const [loginError, setLoginError]     = useState("")
   const [view, setView]                 = useState("dashboard")
   const [users, setUsers]               = useState(USERS_DB)
-  const [sellerLeads, setSellerLeads]   = useState(SELLER_LEADS_DB)
-  const [buyerDeals, setBuyerDeals]     = useState(BUYER_DEALS_DB)
+  const [sellerLeads, setSellerLeads]   = useState([])
+  const [buyerDeals, setBuyerDeals]     = useState([])
+  const [dbLoading, setDbLoading]       = useState(true)
+
+  // ── Load + poll Supabase every 20s ──────────────────────────────────────────
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [leads, deals] = await Promise.all([
+          sb("seller_leads?select=*&order=created_at.desc"),
+          sb("buyer_deals?select=*&order=created_at.desc")
+        ])
+        if (leads) setSellerLeads(leads.map(normalizeLead))
+        if (deals) setBuyerDeals(deals.map(normalizeDeal))
+      } catch(e) { console.error("Supabase load error:", e) }
+      setDbLoading(false)
+    }
+    load()
+    const interval = setInterval(load, 20000)
+    return () => clearInterval(interval)
+  }, [])
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const [selectedDeal, setSelectedDeal] = useState(null)
   const [selectedType, setSelectedType] = useState(null)
   const [sidebarOpen, setSidebarOpen]   = useState(!isMobile)
   const [filterStatus, setFilterStatus] = useState("")
   const [filterSite, setFilterSite]     = useState("")
 
-  const handleUpdate = useCallback((id, type, changes) => {
+  const handleUpdate = useCallback(async (id, type, changes) => {
+    // Optimistic update
     if (type==="seller") setSellerLeads(p=>p.map(d=>d.id===id?{...d,...changes}:d))
     else setBuyerDeals(p=>p.map(d=>d.id===id?{...d,...changes}:d))
+    // Persist to Supabase
+    const table = type==="seller" ? "seller_leads" : "buyer_deals"
+    const patch = {}
+    if (changes.status !== undefined) patch.status = changes.status
+    if (changes.assignedTo !== undefined) patch.assigned_to = changes.assignedTo
+    if (changes.notesArr !== undefined) patch.notes = JSON.stringify(changes.notesArr)
+    if (Object.keys(patch).length > 0) {
+      try { await sb(table+"?id=eq."+id, {method:"PATCH", body:patch}) }
+      catch(e) { console.error("Supabase update error:", e) }
+    }
   },[])
 
   const handleLogin = () => {
@@ -561,7 +669,7 @@ export default function VeribasAdmin() {
   }
 
   // Computed stats
-  const myLeads  = currentUser?.role==="admin" ? sellerLeads : sellerLeads.filter(d=>d.assignedTo===currentUser?.id)
+  const myLeads  = (currentUser?.role==="admin" ? sellerLeads : sellerLeads.filter(d=>d.assignedTo===currentUser?.id))
   const myDeals  = currentUser?.role==="admin" ? buyerDeals  : buyerDeals.filter(d=>d.assignedTo===currentUser?.id)
   const pipeline = [...sellerLeads,...buyerDeals].filter(d=>!["Closed","Dead"].includes(d.status))
   const totalCommission = buyerDeals.filter(d=>d.status==="Closed").reduce((s,d)=>s+d.brokerFee,0)
@@ -667,7 +775,7 @@ export default function VeribasAdmin() {
           <div style={{flex:1}}>
             <div style={{fontFamily:"'Syne',sans-serif",fontSize:15,fontWeight:700,color:C.white}}>{NAV.find(n=>n.id===view)?.label}</div>
           </div>
-          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:C.green,fontWeight:600}}>{fmt(totalCommission)} earned</div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:7,height:7,borderRadius:"50%",background:dbLoading?C.amber:C.green,animation:dbLoading?"none":"pulse 2s ease infinite"}}></div><div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:dbLoading?C.amber:C.green,fontWeight:600}}>{dbLoading?"Loading...":fmt(totalCommission)+" earned"}</div></div><style>{"@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}"}</style>
           <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.muted}}>Veribas Real Estate LLC</div>
         </div>
 
