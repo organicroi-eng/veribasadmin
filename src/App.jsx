@@ -22,7 +22,7 @@ const STATUS_COLOR = {
 }
 
 const USERS_DB = [
-  { id:1, name:"Ahsan Iqbal",      email:"ahsan@veribas.com",   role:"admin",     initials:"AI", password:"admin123" },
+  { id:1, name:"Ahsan Charania",   email:"ahsan@veribas.com",   role:"admin",     initials:"AC", password:"#Veribas12345" },
   { id:2, name:"Sarah Johnson",    email:"sarah@veribas.com",   role:"processor", initials:"SJ", password:"proc123"  },
   { id:3, name:"Marcus Williams",  email:"marcus@veribas.com",  role:"processor", initials:"MW", password:"proc456"  },
 ]
@@ -353,23 +353,148 @@ function Pipeline({sellerLeads, buyerDeals, onSelectDeal, currentUser}) {
 }
 
 // ─── TEAM PAGE (admin only) ───────────────────────────────────────────────────
-function TeamPage({users, sellerLeads, buyerDeals}) {
+function TeamPage({users, setUsers, sellerLeads, buyerDeals, currentUser}) {
+  const [showAdd, setShowAdd]     = useState(false)
+  const [editUser, setEditUser]   = useState(null)
+  const [confirm, setConfirm]     = useState(null)
+  const [newUser, setNewUser]     = useState({name:"",email:"",role:"processor",password:""})
+  const [editForm, setEditForm]   = useState({})
+  const [msg, setMsg]             = useState("")
+
+  const inpStyle = {width:"100%",fontFamily:"'Outfit',sans-serif",fontSize:13,color:C.white,background:C.surface,border:"1px solid "+C.border,borderRadius:6,padding:"9px 12px",outline:"none",boxSizing:"border-box"}
+
+  const getInitials = name => name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2)
+
+  const flash = m => { setMsg(m); setTimeout(()=>setMsg(""),3000) }
+
+  const addUser = () => {
+    if (!newUser.name || !newUser.email || !newUser.password) { flash("All fields required."); return }
+    if (users.find(u=>u.email.toLowerCase()===newUser.email.toLowerCase())) { flash("Email already exists."); return }
+    const id = Math.max(...users.map(u=>u.id)) + 1
+    setUsers(p=>[...p,{...newUser,id,initials:getInitials(newUser.name)}])
+    setNewUser({name:"",email:"",role:"processor",password:""})
+    setShowAdd(false)
+    flash("User added successfully.")
+  }
+
+  const saveEdit = () => {
+    if (!editForm.name || !editForm.email) { flash("Name and email required."); return }
+    setUsers(p=>p.map(u=>u.id===editUser.id?{...u,...editForm,initials:getInitials(editForm.name)}:u))
+    setEditUser(null)
+    flash("User updated successfully.")
+  }
+
+  const removeUser = id => {
+    if (id===currentUser.id) { flash("You cannot remove your own account."); return }
+    setUsers(p=>p.filter(u=>u.id!==id))
+    setConfirm(null)
+    flash("User removed.")
+  }
+
   return (
     <div>
-      <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:700,color:C.white,marginBottom:20}}>Team Management</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:12}}>
+        <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:700,color:C.white}}>Team Management</div>
+        <button onClick={()=>setShowAdd(true)}
+          style={{background:C.blue,color:"#fff",border:"none",borderRadius:7,padding:"9px 18px",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+          + Add User
+        </button>
+      </div>
+
+      {msg && <div style={{background:C.green+"20",border:"1px solid "+C.green+"40",borderRadius:7,padding:"10px 14px",fontFamily:"'Outfit',sans-serif",fontSize:13,color:C.green,marginBottom:16}}>{msg}</div>}
+
+      {/* ADD USER FORM */}
+      {showAdd && (
+        <Card style={{padding:"20px 22px",marginBottom:16}}>
+          <div style={{fontFamily:"'Syne',sans-serif",fontSize:15,fontWeight:700,color:C.white,marginBottom:16}}>Add New User</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div>
+              <label style={{display:"block",fontFamily:"'Outfit',sans-serif",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>Full Name</label>
+              <input placeholder="Jane Smith" value={newUser.name} onChange={e=>setNewUser(p=>({...p,name:e.target.value}))} style={inpStyle} onFocus={e=>e.target.style.borderColor=C.blue} onBlur={e=>e.target.style.borderColor=C.border}/>
+            </div>
+            <div>
+              <label style={{display:"block",fontFamily:"'Outfit',sans-serif",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>Email</label>
+              <input placeholder="jane@veribas.com" value={newUser.email} onChange={e=>setNewUser(p=>({...p,email:e.target.value}))} style={inpStyle} onFocus={e=>e.target.style.borderColor=C.blue} onBlur={e=>e.target.style.borderColor=C.border}/>
+            </div>
+            <div>
+              <label style={{display:"block",fontFamily:"'Outfit',sans-serif",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>Password</label>
+              <input placeholder="Set a password" value={newUser.password} onChange={e=>setNewUser(p=>({...p,password:e.target.value}))} style={inpStyle} onFocus={e=>e.target.style.borderColor=C.blue} onBlur={e=>e.target.style.borderColor=C.border}/>
+            </div>
+            <div>
+              <label style={{display:"block",fontFamily:"'Outfit',sans-serif",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>Role</label>
+              <select value={newUser.role} onChange={e=>setNewUser(p=>({...p,role:e.target.value}))} style={{...inpStyle,cursor:"pointer"}}>
+                <option value="processor" style={{background:C.surface}}>Deal Processor</option>
+                <option value="admin" style={{background:C.surface}}>Admin</option>
+              </select>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={addUser} style={{background:C.blue,color:"#fff",border:"none",borderRadius:6,padding:"9px 20px",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:600,cursor:"pointer"}}>Create User</button>
+            <button onClick={()=>setShowAdd(false)} style={{background:"transparent",color:C.white2,border:"1px solid "+C.border,borderRadius:6,padding:"9px 18px",fontFamily:"'Outfit',sans-serif",fontSize:13,cursor:"pointer"}}>Cancel</button>
+          </div>
+        </Card>
+      )}
+
+      {/* EDIT USER MODAL */}
+      {editUser && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:C.card,border:"1px solid "+C.borderLt,borderRadius:14,width:"100%",maxWidth:440,overflow:"hidden",boxShadow:"0 40px 100px rgba(0,0,0,0.5)"}}>
+            <div style={{background:C.surface,padding:"18px 22px",borderBottom:"1px solid "+C.border,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontFamily:"'Syne',sans-serif",fontSize:16,fontWeight:700,color:C.white}}>Edit User</div>
+              <button onClick={()=>setEditUser(null)} style={{background:"none",border:"none",color:C.white2,cursor:"pointer",fontSize:18}}>✕</button>
+            </div>
+            <div style={{padding:"20px 22px 24px",display:"flex",flexDirection:"column",gap:12}}>
+              {[["Full Name","name","Jane Smith"],["Email","email","jane@veribas.com"],["New Password","password","Leave blank to keep current"]].map(([label,key,ph])=>(
+                <div key={key}>
+                  <label style={{display:"block",fontFamily:"'Outfit',sans-serif",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>{label}</label>
+                  <input type={key==="password"?"password":"text"} placeholder={ph} value={editForm[key]||""} onChange={e=>setEditForm(p=>({...p,[key]:e.target.value}))} style={inpStyle} onFocus={e=>e.target.style.borderColor=C.blue} onBlur={e=>e.target.style.borderColor=C.border}/>
+                </div>
+              ))}
+              <div>
+                <label style={{display:"block",fontFamily:"'Outfit',sans-serif",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>Role</label>
+                <select value={editForm.role||"processor"} onChange={e=>setEditForm(p=>({...p,role:e.target.value}))} style={{...inpStyle,cursor:"pointer"}} disabled={editUser.id===currentUser.id}>
+                  <option value="processor" style={{background:C.surface}}>Deal Processor</option>
+                  <option value="admin" style={{background:C.surface}}>Admin</option>
+                </select>
+                {editUser.id===currentUser.id && <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.muted,marginTop:4}}>You cannot change your own role.</div>}
+              </div>
+              <div style={{display:"flex",gap:8,marginTop:4}}>
+                <button onClick={saveEdit} style={{background:C.blue,color:"#fff",border:"none",borderRadius:6,padding:"10px 20px",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:600,cursor:"pointer",flex:1}}>Save Changes</button>
+                <button onClick={()=>setEditUser(null)} style={{background:"transparent",color:C.white2,border:"1px solid "+C.border,borderRadius:6,padding:"10px 16px",fontFamily:"'Outfit',sans-serif",fontSize:13,cursor:"pointer"}}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE */}
+      {confirm && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:C.card,border:"1px solid "+C.borderLt,borderRadius:14,width:"100%",maxWidth:380,padding:"28px 28px 24px",boxShadow:"0 40px 100px rgba(0,0,0,0.5)"}}>
+            <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:700,color:C.white,marginBottom:8}}>Remove User?</div>
+            <div style={{fontFamily:"'Outfit',sans-serif",fontSize:13,color:C.white2,marginBottom:20,lineHeight:1.6}}>Are you sure you want to remove <strong style={{color:C.white}}>{confirm.name}</strong>? This cannot be undone.</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>removeUser(confirm.id)} style={{background:C.red,color:"#fff",border:"none",borderRadius:6,padding:"10px 20px",fontFamily:"'Outfit',sans-serif",fontSize:13,fontWeight:600,cursor:"pointer",flex:1}}>Yes, Remove</button>
+              <button onClick={()=>setConfirm(null)} style={{background:"transparent",color:C.white2,border:"1px solid "+C.border,borderRadius:6,padding:"10px 16px",fontFamily:"'Outfit',sans-serif",fontSize:13,cursor:"pointer"}}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* USER CARDS */}
       <div style={{display:"grid",gap:12}}>
-        {users.filter(u=>u.role==="processor").map(u=>{
+        {users.filter(u=>u.id!==currentUser.id).map(u=>{
           const sl = sellerLeads.filter(d=>d.assignedTo===u.id)
           const bd = buyerDeals.filter(d=>d.assignedTo===u.id)
           const commission = bd.filter(d=>d.status==="Closed").reduce((s,d)=>s+d.brokerFee,0)
           return (
             <Card key={u.id} style={{padding:"20px 22px"}}>
               <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-                <Avatar name={u.name} initials={u.initials} size={48} color={C.blue}/>
+                <Avatar name={u.name} initials={u.initials} size={48} color={u.role==="admin"?C.purple:C.blue}/>
                 <div style={{flex:1}}>
                   <div style={{fontFamily:"'Syne',sans-serif",fontSize:16,fontWeight:700,color:C.white}}>{u.name}</div>
                   <div style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:C.white2}}>{u.email}</div>
-                  <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.blue,marginTop:2,textTransform:"uppercase",letterSpacing:"0.07em"}}>Deal Processor</div>
+                  <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:u.role==="admin"?C.purple:C.blue,marginTop:2,textTransform:"capitalize",letterSpacing:"0.05em"}}>{u.role==="admin"?"Admin":"Deal Processor"}</div>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,textAlign:"center"}}>
                   {[["Seller Leads",sl.length,C.amber],["Buyer Deals",bd.length,C.cyan],["Commission",fmt(commission),C.green]].map(([k,v,col])=>(
@@ -378,6 +503,16 @@ function TeamPage({users, sellerLeads, buyerDeals}) {
                       <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginTop:2}}>{k}</div>
                     </div>
                   ))}
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  <button onClick={()=>{setEditUser(u);setEditForm({name:u.name,email:u.email,role:u.role,password:""})}}
+                    style={{background:C.blueBg,border:"1px solid "+C.blueBd,color:C.blue,borderRadius:6,padding:"7px 14px",fontFamily:"'Outfit',sans-serif",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                    Edit
+                  </button>
+                  <button onClick={()=>setConfirm(u)}
+                    style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.25)",color:C.red,borderRadius:6,padding:"7px 14px",fontFamily:"'Outfit',sans-serif",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                    Remove
+                  </button>
                 </div>
               </div>
             </Card>
@@ -397,6 +532,7 @@ export default function VeribasAdmin() {
   const [loginForm, setLoginForm]       = useState({email:"",password:""})
   const [loginError, setLoginError]     = useState("")
   const [view, setView]                 = useState("dashboard")
+  const [users, setUsers]               = useState(USERS_DB)
   const [sellerLeads, setSellerLeads]   = useState(SELLER_LEADS_DB)
   const [buyerDeals, setBuyerDeals]     = useState(BUYER_DEALS_DB)
   const [selectedDeal, setSelectedDeal] = useState(null)
@@ -411,7 +547,7 @@ export default function VeribasAdmin() {
   },[])
 
   const handleLogin = () => {
-    const u = USERS_DB.find(u=>u.email.toLowerCase()===loginForm.email.toLowerCase()&&u.password===loginForm.password)
+    const u = users.find(u=>u.email.toLowerCase()===loginForm.email.toLowerCase()&&u.password===loginForm.password)
     if (u) { setCurrentUser(u); setLoginError("") }
     else setLoginError("Invalid email or password.")
   }
@@ -594,7 +730,7 @@ export default function VeribasAdmin() {
                     </thead>
                     <tbody>
                       {myLeads.filter(d=>(currentUser.role==="admin"||d.assignedTo===currentUser.id)).filter(d=>(!filterStatus||d.status===filterStatus)&&(!filterSite||d.site===filterSite)).map(d=>{
-                        const assignee = USERS_DB.find(u=>u.id===d.assignedTo)
+                        const assignee = users.find(u=>u.id===d.assignedTo)
                         return (
                           <tr key={d.id} onClick={()=>{setSelectedDeal(d);setSelectedType("seller")}}
                             style={{cursor:"pointer",borderBottom:`1px solid ${C.border}`,transition:"background 0.15s"}}
@@ -642,7 +778,7 @@ export default function VeribasAdmin() {
                     </thead>
                     <tbody>
                       {myDeals.filter(d=>(!filterStatus||d.status===filterStatus)).map(d=>{
-                        const assignee = USERS_DB.find(u=>u.id===d.assignedTo)
+                        const assignee = users.find(u=>u.id===d.assignedTo)
                         return (
                           <tr key={d.id} onClick={()=>{setSelectedDeal(d);setSelectedType("buyer")}}
                             style={{cursor:"pointer",borderBottom:`1px solid ${C.border}`,transition:"background 0.15s"}}
@@ -671,7 +807,7 @@ export default function VeribasAdmin() {
 
           {view==="pipeline" && <Pipeline sellerLeads={currentUser.role==="admin"?sellerLeads:sellerLeads.filter(d=>d.assignedTo===currentUser.id)} buyerDeals={currentUser.role==="admin"?buyerDeals:buyerDeals.filter(d=>d.assignedTo===currentUser.id)} onSelectDeal={(d,t)=>{setSelectedDeal(d);setSelectedType(t)}} currentUser={currentUser}/>}
 
-          {view==="team" && currentUser.role==="admin" && <TeamPage users={USERS_DB} sellerLeads={sellerLeads} buyerDeals={buyerDeals}/>}
+          {view==="team" && currentUser.role==="admin" && <TeamPage users={users} setUsers={setUsers} sellerLeads={sellerLeads} buyerDeals={buyerDeals} currentUser={currentUser}/>}
         </div>
       </div>
 
@@ -682,7 +818,7 @@ export default function VeribasAdmin() {
           dealType={selectedType}
           onClose={()=>setSelectedDeal(null)}
           currentUser={currentUser}
-          users={USERS_DB}
+          users={users}
           onUpdate={handleUpdate}
         />
       )}
