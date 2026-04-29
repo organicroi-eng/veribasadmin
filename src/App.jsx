@@ -24,7 +24,7 @@ const STATUS_COLOR = {
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 const SUPA_URL = "https://dsoydsncwltjyvhakwvn.supabase.co"
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzb3lkc25jd2x0anl2aGFrd3ZuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MTkzOTgsImV4cCI6MjA5Mjk5NTM5OH0.hIe-gbqhcJ_H0VHPbqxNhYPNMPLfy86ggky-mUqjQ1c"
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzb3lkc25jd2x0anl2aGFrd3ZuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzQxOTM5OCwiZXhwIjoyMDkyOTk1Mzk4fQ.dFh6m3Pta8szesWEBimUJVV1i3xPAniHZmXqFZcOtgU"
 
 async function sb(path, opts={}) {
   const res = await fetch(SUPA_URL + "/rest/v1/" + path, {
