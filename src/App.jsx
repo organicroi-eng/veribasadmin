@@ -248,33 +248,49 @@ function EmailDrafter({deal, dealType, user}) {
 
 // ─── PUBLISH TOGGLES ─────────────────────────────────────────────────────────
 function PublishToggles({deal, onUpdate}) {
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg]       = useState("")
+  const [saving, setSaving]       = useState(false)
+  const [msg, setMsg]             = useState("")
+  const [dukaanOn, setDukaanOn]   = useState(deal.publishedDukaan || false)
+  const [tillOn, setTillOn]       = useState(deal.publishedTill || false)
+  const [revenue, setRevenue]     = useState(deal.monthlyRevenue || "")
 
   const toggle = async (portal) => {
     setSaving(true)
-    const field   = portal === "dukaan" ? "publishedDukaan" : "publishedTill"
-    const dbField = portal === "dukaan" ? "published_dukaanapna" : "published_tillstreet"
-    const newVal  = !deal[field]
-
-    // Build listing name from lead data
+    const dbField  = portal === "dukaan" ? "published_dukaanapna" : "published_tillstreet"
+    const localVal = portal === "dukaan" ? dukaanOn : tillOn
+    const newVal   = !localVal
     const listingName = deal.listingName || (deal.firstName + " " + deal.lastName + "'s " + deal.type)
 
+    // Update local state immediately so toggle flips right away
+    if (portal === "dukaan") setDukaanOn(newVal)
+    else setTillOn(newVal)
+
     try {
-      await sb("seller_leads?id=eq." + deal.id, {
+      const res = await sb("seller_leads?id=eq." + deal.id, {
         method: "PATCH",
-        body: {
-          [dbField]: newVal,
-          listing_name: listingName,
-        }
+        body: { [dbField]: newVal, listing_name: listingName }
       })
-      onUpdate(deal.id, "seller", { [field]: newVal, listingName })
+      // Also update parent state
+      const stateField = portal === "dukaan" ? "publishedDukaan" : "publishedTill"
+      onUpdate(deal.id, "seller", { [stateField]: newVal, listingName })
       setMsg((newVal ? "✅ Published to " : "⭕ Removed from ") + (portal === "dukaan" ? "DukaanApna" : "TillStreet"))
       setTimeout(() => setMsg(""), 3000)
     } catch(e) {
-      setMsg("❌ Error saving")
+      // Revert on error
+      if (portal === "dukaan") setDukaanOn(localVal)
+      else setTillOn(localVal)
+      setMsg("❌ Error — check connection")
     }
     setSaving(false)
+  }
+
+  const saveRevenue = async (val) => {
+    const num = Number(String(val).replace(/[^0-9.]/g,""))
+    if (!num) return
+    try {
+      await sb("seller_leads?id=eq." + deal.id, {method:"PATCH", body:{monthly_revenue: num}})
+      onUpdate(deal.id, "seller", {monthlyRevenue: num})
+    } catch(e) { console.error(e) }
   }
 
   const btnStyle = (active, color) => ({
@@ -292,48 +308,44 @@ function PublishToggles({deal, onUpdate}) {
         Publish to Buyer Portals
       </div>
       <div style={{display:"flex", gap:8, marginBottom:10, flexWrap:"wrap"}}>
-        <button onClick={() => toggle("dukaan")} style={btnStyle(deal.publishedDukaan, C.orange)} disabled={saving}>
+        <button onClick={() => toggle("dukaan")} disabled={saving}
+          style={{display:"flex",alignItems:"center",gap:8,padding:"10px 16px",borderRadius:8,border:`1px solid ${dukaanOn?C.orange:C.border}`,background:dukaanOn?C.orange+"15":C.surface,cursor:saving?"not-allowed":"pointer",transition:"all 0.2s",flex:1,opacity:saving?0.6:1}}>
           <span style={{fontSize:18}}>🏪</span>
           <div>
-            <div style={{fontFamily:"'Syne',sans-serif", fontSize:13, fontWeight:700, color: deal.publishedDukaan ? C.orange : C.white}}>DukaanApna</div>
-            <div style={{fontFamily:"'Outfit',sans-serif", fontSize:11, color:C.muted}}>Community buyer portal</div>
+            <div style={{fontFamily:"'Syne',sans-serif",fontSize:13,fontWeight:700,color:dukaanOn?C.orange:C.white}}>DukaanApna</div>
+            <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.muted}}>Community buyer portal</div>
           </div>
-          <div style={{marginLeft:"auto", width:32, height:18, borderRadius:9, background: deal.publishedDukaan ? C.orange : C.border, position:"relative", transition:"background 0.2s"}}>
-            <div style={{position:"absolute", top:2, left: deal.publishedDukaan ? 16 : 2, width:14, height:14, borderRadius:"50%", background:"#fff", transition:"left 0.2s"}}/>
+          <div style={{marginLeft:"auto",width:32,height:18,borderRadius:9,background:dukaanOn?C.orange:C.border,position:"relative",transition:"background 0.2s",flexShrink:0}}>
+            <div style={{position:"absolute",top:2,left:dukaanOn?16:2,width:14,height:14,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
           </div>
         </button>
-        <button onClick={() => toggle("till")} style={btnStyle(deal.publishedTill, C.blue)} disabled={saving}>
-          <span style={{fontSize:18}}>$</span>
+        <button onClick={() => toggle("till")} disabled={saving}
+          style={{display:"flex",alignItems:"center",gap:8,padding:"10px 16px",borderRadius:8,border:`1px solid ${tillOn?C.blue:C.border}`,background:tillOn?C.blue+"15":C.surface,cursor:saving?"not-allowed":"pointer",transition:"all 0.2s",flex:1,opacity:saving?0.6:1}}>
+          <span style={{fontSize:16,fontWeight:700,color:tillOn?C.blue:C.white}}>$</span>
           <div>
-            <div style={{fontFamily:"'Syne',sans-serif", fontSize:13, fontWeight:700, color: deal.publishedTill ? C.blue : C.white}}>TillStreet</div>
-            <div style={{fontFamily:"'Outfit',sans-serif", fontSize:11, color:C.muted}}>PE / institutional portal</div>
+            <div style={{fontFamily:"'Syne',sans-serif",fontSize:13,fontWeight:700,color:tillOn?C.blue:C.white}}>TillStreet</div>
+            <div style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.muted}}>PE / institutional portal</div>
           </div>
-          <div style={{marginLeft:"auto", width:32, height:18, borderRadius:9, background: deal.publishedTill ? C.blue : C.border, position:"relative", transition:"background 0.2s"}}>
-            <div style={{position:"absolute", top:2, left: deal.publishedTill ? 16 : 2, width:14, height:14, borderRadius:"50%", background:"#fff", transition:"left 0.2s"}}/>
+          <div style={{marginLeft:"auto",width:32,height:18,borderRadius:9,background:tillOn?C.blue:C.border,position:"relative",transition:"background 0.2s",flexShrink:0}}>
+            <div style={{position:"absolute",top:2,left:tillOn?16:2,width:14,height:14,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
           </div>
         </button>
       </div>
-      {/* Revenue input for listing */}
       <div style={{marginBottom:8}}>
-        <label style={{display:"block", fontFamily:"'Outfit',sans-serif", fontSize:10, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color:C.muted, marginBottom:4}}>
+        <label style={{display:"block",fontFamily:"'Outfit',sans-serif",fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>
           Monthly Revenue (for listing display)
         </label>
         <input
           type="text"
           placeholder="e.g. 85000"
-          defaultValue={deal.monthlyRevenue || ""}
-          onBlur={async e => {
-            const val = Number(e.target.value.replace(/[^0-9.]/g,""))
-            if (val) {
-              await sb("seller_leads?id=eq." + deal.id, {method:"PATCH", body:{monthly_revenue: val}})
-              onUpdate(deal.id, "seller", {monthlyRevenue: val})
-            }
-          }}
-          style={{width:"100%", fontFamily:"'Outfit',sans-serif", fontSize:13, color:C.white, background:C.surface, border:"1px solid "+C.border, borderRadius:6, padding:"9px 12px", outline:"none", boxSizing:"border-box"}}
+          value={revenue}
+          onChange={e => setRevenue(e.target.value)}
+          onBlur={() => saveRevenue(revenue)}
+          style={{width:"100%",fontFamily:"'Outfit',sans-serif",fontSize:13,color:C.white,background:C.surface,border:"1px solid "+C.border,borderRadius:6,padding:"9px 12px",outline:"none",boxSizing:"border-box"}}
           onFocus={e => e.target.style.borderColor=C.blue}
         />
       </div>
-      {msg && <div style={{fontFamily:"'Outfit',sans-serif", fontSize:12, color:C.green, marginTop:6}}>{msg}</div>}
+      {msg && <div style={{fontFamily:"'Outfit',sans-serif",fontSize:12,color:msg.startsWith("✅")?C.green:msg.startsWith("⭕")?C.amber:C.red,marginTop:6}}>{msg}</div>}
     </div>
   )
 }
