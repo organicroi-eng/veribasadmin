@@ -12,7 +12,7 @@ const C = {
   blue:"#3b82f6", blueDk:"#1d4ed8", blueBg:"#0f1e38", blueBd:"#1e3860",
   white:"#f1f5f9", white2:"#94a3b8", muted:"#475569",
   green:"#10b981", red:"#ef4444", amber:"#f59e0b",
-  purple:"#8b5cf6", cyan:"#06b6d4", orange:"#f97316",
+  purple:"#8b5cf6", cyan:"#06b6d4", orange:"#f97316", orange:"#f97316",
 }
 
 const STATUS_COLOR = {
@@ -59,6 +59,9 @@ function normalizeLead(row) {
     email: row.email || "",
     address: row.address || "",
     askingPrice: Number(row.asking_price) || 0,
+    monthlyRevenue: Number(row.monthly_revenue) || 0,
+    listingName: row.listing_name || "",
+    daysListed: Number(row.days_listed) || 0,
     details: row.details || "",
     reason: row.reason || "",
     notes: row.notes || "",
@@ -66,6 +69,8 @@ function normalizeLead(row) {
     status: row.status || "New",
     assignedTo: row.assigned_to ? Number(row.assigned_to) : null,
     ts: row.created_at || new Date().toISOString(),
+    publishedDukaan: row.published_dukaanapna || false,
+    publishedTill: row.published_tillstreet || false,
   }
 }
 
@@ -240,6 +245,99 @@ function EmailDrafter({deal, dealType, user}) {
   )
 }
 
+
+// ─── PUBLISH TOGGLES ─────────────────────────────────────────────────────────
+function PublishToggles({deal, onUpdate}) {
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg]       = useState("")
+
+  const toggle = async (portal) => {
+    setSaving(true)
+    const field   = portal === "dukaan" ? "publishedDukaan" : "publishedTill"
+    const dbField = portal === "dukaan" ? "published_dukaanapna" : "published_tillstreet"
+    const newVal  = !deal[field]
+
+    // Build listing name from lead data
+    const listingName = deal.listingName || (deal.firstName + " " + deal.lastName + "'s " + deal.type)
+
+    try {
+      await sb("seller_leads?id=eq." + deal.id, {
+        method: "PATCH",
+        body: {
+          [dbField]: newVal,
+          listing_name: listingName,
+        }
+      })
+      onUpdate(deal.id, "seller", { [field]: newVal, listingName })
+      setMsg((newVal ? "✅ Published to " : "⭕ Removed from ") + (portal === "dukaan" ? "DukaanApna" : "TillStreet"))
+      setTimeout(() => setMsg(""), 3000)
+    } catch(e) {
+      setMsg("❌ Error saving")
+    }
+    setSaving(false)
+  }
+
+  const btnStyle = (active, color) => ({
+    display: "flex", alignItems: "center", gap: 8, padding: "10px 16px",
+    borderRadius: 8, border: `1px solid ${active ? color : C.border}`,
+    background: active ? color + "15" : C.surface,
+    cursor: saving ? "not-allowed" : "pointer",
+    transition: "all 0.2s", flex: 1,
+    opacity: saving ? 0.6 : 1,
+  })
+
+  return (
+    <div style={{marginTop: 16}}>
+      <div style={{fontFamily:"'Outfit',sans-serif", fontSize:10, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:C.muted, marginBottom:10}}>
+        Publish to Buyer Portals
+      </div>
+      <div style={{display:"flex", gap:8, marginBottom:10, flexWrap:"wrap"}}>
+        <button onClick={() => toggle("dukaan")} style={btnStyle(deal.publishedDukaan, C.orange)} disabled={saving}>
+          <span style={{fontSize:18}}>🏪</span>
+          <div>
+            <div style={{fontFamily:"'Syne',sans-serif", fontSize:13, fontWeight:700, color: deal.publishedDukaan ? C.orange : C.white}}>DukaanApna</div>
+            <div style={{fontFamily:"'Outfit',sans-serif", fontSize:11, color:C.muted}}>Community buyer portal</div>
+          </div>
+          <div style={{marginLeft:"auto", width:32, height:18, borderRadius:9, background: deal.publishedDukaan ? C.orange : C.border, position:"relative", transition:"background 0.2s"}}>
+            <div style={{position:"absolute", top:2, left: deal.publishedDukaan ? 16 : 2, width:14, height:14, borderRadius:"50%", background:"#fff", transition:"left 0.2s"}}/>
+          </div>
+        </button>
+        <button onClick={() => toggle("till")} style={btnStyle(deal.publishedTill, C.blue)} disabled={saving}>
+          <span style={{fontSize:18}}>$</span>
+          <div>
+            <div style={{fontFamily:"'Syne',sans-serif", fontSize:13, fontWeight:700, color: deal.publishedTill ? C.blue : C.white}}>TillStreet</div>
+            <div style={{fontFamily:"'Outfit',sans-serif", fontSize:11, color:C.muted}}>PE / institutional portal</div>
+          </div>
+          <div style={{marginLeft:"auto", width:32, height:18, borderRadius:9, background: deal.publishedTill ? C.blue : C.border, position:"relative", transition:"background 0.2s"}}>
+            <div style={{position:"absolute", top:2, left: deal.publishedTill ? 16 : 2, width:14, height:14, borderRadius:"50%", background:"#fff", transition:"left 0.2s"}}/>
+          </div>
+        </button>
+      </div>
+      {/* Revenue input for listing */}
+      <div style={{marginBottom:8}}>
+        <label style={{display:"block", fontFamily:"'Outfit',sans-serif", fontSize:10, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color:C.muted, marginBottom:4}}>
+          Monthly Revenue (for listing display)
+        </label>
+        <input
+          type="text"
+          placeholder="e.g. 85000"
+          defaultValue={deal.monthlyRevenue || ""}
+          onBlur={async e => {
+            const val = Number(e.target.value.replace(/[^0-9.]/g,""))
+            if (val) {
+              await sb("seller_leads?id=eq." + deal.id, {method:"PATCH", body:{monthly_revenue: val}})
+              onUpdate(deal.id, "seller", {monthlyRevenue: val})
+            }
+          }}
+          style={{width:"100%", fontFamily:"'Outfit',sans-serif", fontSize:13, color:C.white, background:C.surface, border:"1px solid "+C.border, borderRadius:6, padding:"9px 12px", outline:"none", boxSizing:"border-box"}}
+          onFocus={e => e.target.style.borderColor=C.blue}
+        />
+      </div>
+      {msg && <div style={{fontFamily:"'Outfit',sans-serif", fontSize:12, color:C.green, marginTop:6}}>{msg}</div>}
+    </div>
+  )
+}
+
 // ─── DEAL DETAIL MODAL ────────────────────────────────────────────────────────
 function DealDetail({deal, dealType, onClose, currentUser, users, onUpdate}) {
   const [tab, setTab]         = useState("info")
@@ -305,8 +403,10 @@ function DealDetail({deal, dealType, onClose, currentUser, users, onUpdate}) {
           {tab==="info" && (
             <div>
               {commissionLine}
+              {/* Publish toggles for seller leads */}
+              {dealType==="seller" && <PublishToggles deal={deal} onUpdate={onUpdate}/>}
               {/* Contact */}
-              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:C.muted,marginBottom:10}}>Contact</div>
+              <div style={{fontFamily:"'Outfit',sans-serif",fontSize:10,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:C.muted,marginBottom:10,marginTop:16}}>Contact</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
                 {[
                   dealType==="seller"?["Name",deal.firstName+" "+deal.lastName]:["Buyer",deal.buyerName],
@@ -859,7 +959,15 @@ export default function VeribasAdmin() {
                             <td style={{padding:"12px 8px"}}><span style={{fontSize:18}}>{d.icon}</span></td>
                             <td style={{padding:"12px 8px",fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.white2}}>{d.site.replace(".com","")}</td>
                             <td style={{padding:"12px 8px",fontFamily:"'JetBrains Mono',monospace",fontSize:13,fontWeight:700,color:C.amber}}>{fmtK(d.askingPrice)}</td>
-                            <td style={{padding:"12px 8px"}}><StatusBadge status={d.status}/></td>
+                            <td style={{padding:"12px 8px"}}>
+                              <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                                <StatusBadge status={d.status}/>
+                                <div style={{display:"flex",gap:3}}>
+                                  {d.publishedDukaan&&<span style={{fontSize:9,fontWeight:700,background:"rgba(249,115,22,0.15)",color:"#f97316",borderRadius:3,padding:"1px 5px"}}>DA</span>}
+                                  {d.publishedTill&&<span style={{fontSize:9,fontWeight:700,background:"rgba(59,130,246,0.15)",color:C.blue,borderRadius:3,padding:"1px 5px"}}>TS</span>}
+                                </div>
+                              </div>
+                            </td>
                             <td style={{padding:"12px 8px"}}>{assignee?<div style={{display:"flex",alignItems:"center",gap:6}}><Avatar name={assignee.name} initials={assignee.initials} size={22}/><span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.white2}}>{assignee.name.split(" ")[0]}</span></div>:<span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.muted}}>Unassigned</span>}</td>
                             <td style={{padding:"12px 8px",fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.muted}}>{fmtDate(d.ts)}</td>
                             <td style={{padding:"12px 14px"}}><button style={{background:C.blue,color:"#fff",border:"none",borderRadius:4,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>Open</button></td>
@@ -908,7 +1016,15 @@ export default function VeribasAdmin() {
                             <td style={{padding:"12px 8px",fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.white2}}>{d.portal}</td>
                             <td style={{padding:"12px 8px",fontFamily:"'JetBrains Mono',monospace",fontSize:13,fontWeight:700,color:C.green}}>{fmtK(d.offerPrice)}</td>
                             <td style={{padding:"12px 8px",fontFamily:"'JetBrains Mono',monospace",fontSize:12,fontWeight:600,color:C.green}}>{fmt(d.brokerFee)}</td>
-                            <td style={{padding:"12px 8px"}}><StatusBadge status={d.status}/></td>
+                            <td style={{padding:"12px 8px"}}>
+                              <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                                <StatusBadge status={d.status}/>
+                                <div style={{display:"flex",gap:3}}>
+                                  {d.publishedDukaan&&<span style={{fontSize:9,fontWeight:700,background:"rgba(249,115,22,0.15)",color:"#f97316",borderRadius:3,padding:"1px 5px"}}>DA</span>}
+                                  {d.publishedTill&&<span style={{fontSize:9,fontWeight:700,background:"rgba(59,130,246,0.15)",color:C.blue,borderRadius:3,padding:"1px 5px"}}>TS</span>}
+                                </div>
+                              </div>
+                            </td>
                             <td style={{padding:"12px 8px"}}>{assignee?<div style={{display:"flex",alignItems:"center",gap:6}}><Avatar name={assignee.name} initials={assignee.initials} size={22}/><span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.white2}}>{assignee.name.split(" ")[0]}</span></div>:<span style={{fontFamily:"'Outfit',sans-serif",fontSize:11,color:C.muted}}>Unassigned</span>}</td>
                             <td style={{padding:"12px 14px"}}><button style={{background:C.blue,color:"#fff",border:"none",borderRadius:4,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>Open</button></td>
                           </tr>
