@@ -116,14 +116,22 @@ function EmailDrafter({deal, dealType, user}) {
       "Sign off with the broker's name and Veribas Real Estate LLC contact info.",
     ].join("\n")
     try {
+      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+      if (!apiKey) { setDraft("API key not configured. Add VITE_ANTHROPIC_API_KEY in Vercel environment variables."); setLoading(false); return }
       const res = await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{
+          "Content-Type":"application/json",
+          "x-api-key": apiKey,
+          "anthropic-version":"2023-06-01",
+          "anthropic-dangerous-direct-browser-access":"true"
+        },
         body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:600,messages:[{role:"user",content:prompt}]})
       })
       const data = await res.json()
+      if (data.error) { setDraft("API error: " + data.error.message); setLoading(false); return }
       setDraft(data.content?.[0]?.text || "Unable to generate draft.")
-    } catch(e) { setDraft("Error generating draft. Check your API key.") }
+    } catch(e) { setDraft("Error: " + e.message) }
     setLoading(false)
   }
 
